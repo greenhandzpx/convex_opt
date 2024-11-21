@@ -1,19 +1,29 @@
 import numpy as np
 from scipy.optimize import minimize
+import time
 
 
 class Benchamrk:
-    def __init__(self, n_samples, n_features):
+    def __init__(self, n_samples, n_features, auto_gen=True, save_data=True):
         self.n_samples = n_samples
         self.n_features = n_features
         # np.random.seed(1)
-        self.X = np.random.randn(n_samples, n_features)
-        # 生成稀疏系数
-        beta_true = np.zeros(n_features)
-        non_zero_indices = np.random.choice(n_features, size=10, replace=False)
-        beta_true[non_zero_indices] = np.random.randn(10)
-        # 生成目标变量
-        self.y = self.X.dot(beta_true) + 0.01 * np.random.randn(n_samples)
+        if auto_gen:
+            self.X = np.random.randn(n_samples, n_features)
+            # 生成稀疏系数
+            beta_true = np.zeros(n_features)
+            non_zero_indices = np.random.choice(n_features, size=10, replace=False)
+            beta_true[non_zero_indices] = np.random.randn(10)
+            # 生成目标变量
+            self.y = self.X.dot(beta_true) + 0.01 * np.random.randn(n_samples)
+            if save_data:
+                np.savetxt(f'X-{self.n_samples}x{self.n_features}.csv', self.X, delimiter=',')
+                np.savetxt(f'y-{self.n_samples}x{self.n_features}.csv', self.y, delimiter=',')
+        else:
+            self.X = np.loadtxt(f'X-{self.n_samples}x{self.n_features}.csv', delimiter=',')
+            self.y = np.loadtxt(f'y-{self.n_samples}x{self.n_features}.csv', delimiter=',')
+            print(self.X.shape)
+            print(self.y.shape)
 
     def mse(self, beta):
         err = self.X @ beta - self.y 
@@ -40,8 +50,15 @@ class Benchamrk:
         # lambda1 = x[n_features]
         # lambda2 = x[n_features + 1]
         return self.mse_grad(beta) + self.sparsity_grad(beta, lambda1, lambda2)
+    def norm_beta(self, beta, err):
+        for i in range(len(beta)):
+            if abs(beta[i]) < err:
+                beta[i] = 0
+        return beta
+
 
     def print_result(self, method_name, beta, lambda1, lambda2, n_iters, converged):
+        beta = self.norm_beta(beta, 1e-3)
         print("========================{}: ========================".format(method_name))
         print("N samples: {}, N features: {}".format(self.n_samples, self.n_features))
         print("(Initial) Learning rate: {}, lambda1: {}, lambda2: {}".format(self.learning_rate, self.lambda1, self.lambda2))
@@ -49,16 +66,16 @@ class Benchamrk:
         print("Final beta: {}".format(beta))
         print("Objective function minimum result: {}".format(self.opt_func(beta, lambda1, lambda2)))
         print("MSE minimum result: {}".format(self.mse(beta)))
+        print("Sparsity result: {}".format(np.count_nonzero(beta)))
 
     def lagrange_dual(self):
         # beta = np.zeros(n_features)
         
         def inner_func(beta, v, k):
-            abs_beta = np.abs(beta) 
-            limit = self.n_features - k + 1 if self.n_features > k - 1 else 0
-            indices_to_zero = abs_beta.argsort()[:int(limit)]
-            beta[indices_to_zero] = 0
-            # print("beta norm", np.linalg.norm(beta, ord=0))
+            # abs_beta = np.abs(beta) 
+            # limit = self.n_features - k + 1 if self.n_features > k - 1 else 0
+            # indices_to_zero = abs_beta.argsort()[:int(limit)]
+            # beta[indices_to_zero] = 0
             return self.mse(beta) + v * (np.linalg.norm(beta, ord=0) - k)
 
         # def outer_func(x, k):
@@ -66,13 +83,11 @@ class Benchamrk:
             beta = np.ones(self.n_features)
             beta /= 1000
             result = minimize(inner_func, beta, (v[0], k))
-            # print("inner succ", result.success)
-            # print("inner msg", result.message)
             return -result.fun
         
         # Constraint for v
-        upper_bound = 5e+6
-        constraint1 = {'type': 'ineq', 'fun': lambda v: v[0] - 1e-4}
+        upper_bound = 5e+3
+        constraint1 = {'type': 'ineq', 'fun': lambda v: v[0] - 1e-8}
         constraint2 = {'type': 'ineq', 'fun': lambda v: -v[0] + upper_bound}
 
         # max L(beta, v)
@@ -88,15 +103,18 @@ class Benchamrk:
         # print("msg", result.message)
         # beta = np.zeros(n_features)
         beta = np.ones(self.n_features)
-        beta /= 1000
+        beta /= 10000
         inner_res = minimize(inner_func, beta, (v[0], k))
         # print("succ", inner_res.success)
         # print("msg", inner_res.message)
         beta = inner_res.x
+        beta = self.norm_beta(beta, 1e-3)
+        print("N samples: {}, N features: {}".format(self.n_samples, self.n_features))
         print("Final beta: {}".format(beta))
-        print("Final beta's Zero norm: {}".format(np.linalg.norm(beta, ord=0)))
+        # print("Final beta's Zero norm: {}".format(np.linalg.norm(beta, ord=0)))
         print("Final v: {}".format(v))
         print("MSE minimum result: {}".format(self.mse(beta)))
+        print("Sparsity result: {}".format(np.count_nonzero(beta)))
 
     def gradient_descent(self, lambda1=1e-5, lambda2=1e-5, learning_rate=0.01, n_iters=5000, err=1e-5):
         n_features = self.n_features
@@ -197,11 +215,31 @@ class Benchamrk:
         self.learning_rate = learning_rate
         self.lambda1 = lambda1
         self.lambda2 = lambda2
+
+        start_ts = time.perf_counter() 
         self.lagrange_dual()
+        end_ts = time.perf_counter()
+        print("Total time used: {}".format(end_ts - start_ts))
+
+        start_ts = time.perf_counter() 
         self.gradient_descent(lambda1=lambda1, lambda2=lambda2, learning_rate=learning_rate, n_iters=n_iters)
+        end_ts = time.perf_counter()
+        print("Total time used: {}".format(end_ts - start_ts))
+
+        start_ts = time.perf_counter() 
         self.steepest_descent(lambda1=lambda1, lambda2=lambda2, learning_rate=learning_rate, n_iters=n_iters)
+        end_ts = time.perf_counter()
+        print("Total time used: {}".format(end_ts - start_ts))
+
+        start_ts = time.perf_counter() 
         self.newton(lambda1=lambda1, lambda2=lambda2, n_iters=n_iters)
+        end_ts = time.perf_counter()
+        print("Total time used: {}".format(end_ts - start_ts))
+
+        start_ts = time.perf_counter() 
         self.coordinate_descent(lambda1=lambda1, lambda2=lambda2, n_iters=n_iters)
+        end_ts = time.perf_counter()
+        print("Total time used: {}".format(end_ts - start_ts))
 
 
 if __name__ == "__main__":
@@ -215,6 +253,7 @@ if __name__ == "__main__":
     lambdas = [1e-5, 1e-3, 1e-1]
 
     for ns, nf in zip(n_samples_arr, n_features_arr):
-        bench = Benchamrk(ns, nf)
+        # bench = Benchamrk(ns, nf)
+        bench = Benchamrk(ns, nf, auto_gen=False)
         for lr, lambda1 in zip(learning_rates, lambdas):
             bench.benchmark(lr, lambda1, lambda1)
