@@ -17,11 +17,11 @@ class Benchamrk:
             # 生成目标变量
             self.y = self.X.dot(beta_true) + 0.01 * np.random.randn(n_samples)
             if save_data:
-                np.savetxt(f'X-{self.n_samples}x{self.n_features}.csv', self.X, delimiter=',')
-                np.savetxt(f'y-{self.n_samples}x{self.n_features}.csv', self.y, delimiter=',')
+                np.savetxt(f'X-{self.n_samples}x{self.n_features}.txt', self.X, delimiter=',')
+                np.savetxt(f'y-{self.n_samples}x{self.n_features}.txt', self.y, delimiter=',')
         else:
-            self.X = np.loadtxt(f'X-{self.n_samples}x{self.n_features}.csv', delimiter=',')
-            self.y = np.loadtxt(f'y-{self.n_samples}x{self.n_features}.csv', delimiter=',')
+            self.X = np.loadtxt(f'X-{self.n_samples}x{self.n_features}.txt', delimiter=',')
+            self.y = np.loadtxt(f'y-{self.n_samples}x{self.n_features}.txt', delimiter=',')
             print(self.X.shape)
             print(self.y.shape)
 
@@ -69,16 +69,9 @@ class Benchamrk:
         print("Sparsity result: {}".format(np.count_nonzero(beta)))
 
     def lagrange_dual(self):
-        # beta = np.zeros(n_features)
-        
         def inner_func(beta, v, k):
-            # abs_beta = np.abs(beta) 
-            # limit = self.n_features - k + 1 if self.n_features > k - 1 else 0
-            # indices_to_zero = abs_beta.argsort()[:int(limit)]
-            # beta[indices_to_zero] = 0
             return self.mse(beta) + v * (np.linalg.norm(beta, ord=0) - k)
 
-        # def outer_func(x, k):
         def outer_func(v, k):
             beta = np.ones(self.n_features)
             beta /= 1000
@@ -95,18 +88,12 @@ class Benchamrk:
         v = np.zeros(1)
         v[0] = upper_bound / 10 
         result = minimize(outer_func, v, (k), constraints=[constraint1, constraint2])
-        # result = minimize(outer_func, v, (k), constraints=[constraint1])
 
         print("========================Lagrange dual: ========================")
         v = result.x
-        # print("succ", result.success)
-        # print("msg", result.message)
-        # beta = np.zeros(n_features)
         beta = np.ones(self.n_features)
         beta /= 10000
         inner_res = minimize(inner_func, beta, (v[0], k))
-        # print("succ", inner_res.success)
-        # print("msg", inner_res.message)
         beta = inner_res.x
         beta = self.norm_beta(beta, 1e-3)
         print("N samples: {}, N features: {}".format(self.n_samples, self.n_features))

@@ -63,7 +63,7 @@ Sparsity result: 20
 Total time used: 0.0029649579664692283
 ========================Newton: ========================
 N samples: 300, N features: 50
-(Initial) Learning rate: 0.1, lambda1: 1e-05, lambda2: 1e-05
+(Initial) Learning rate: 0.1, ggmbda1: 1e-05, lambda2: 1e-05
 Converged: True, n_iters: 2
 Final beta: [ 0.00000000e+00  0.00000000e+00  0.00000000e+00  0.00000000e+00
   0.00000000e+00 -1.26375304e-03  0.00000000e+00 -3.27562600e-01
